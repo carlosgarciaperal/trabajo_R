@@ -1,0 +1,288 @@
+#Abrimos la librería biomart
+library(biomaRt)
+
+#Seleccionamos una base de datos
+listMarts()
+
+# Procedemos a utilizar una base de datos por ejemplo ENSEMBL_MART_ENSEMBL
+database= useMart("ENSEMBL_MART_ENSEMBL")
+listDatasets(database)
+
+#En nuestro caso vamos a comparar la secuencia proteica del gen HERC2
+# de 20 especies animales, por ello tendremos que elegir igulmente 20 
+#datasets de la base de datos ensembl. 
+
+#anancymaae_gene_ensembl  mono_nocturno
+#rferrumequinum_gene_ensembl murcielago
+#ecaballus_gene_ensembl  caballo
+#fcatus_gene_ensembl     gato
+#hsapiens_gene_ensembl   humano
+#bbbison_gene_ensembl    bison
+#sspietrain_gene_ensembl  cerdo_vietnamita 
+#btaurus_gene_ensembl  toro
+#rnorvegicus_gene_ensembl rata
+# mmusculus_gene_ensembl raton
+# mmulatta_gene_ensembl macaco
+# mgallopavo_gene_ensembl pavo_salvaje
+# scanaria_gene_ensembl canario
+# ssalar_gene_ensembl  salmon
+# preticulata_gene_ensembl pez_millon
+# olatipes_gene_ensembl pez_japones
+# falbicollis_gene_ensembl papamoscas
+# mvitellinus_gene_ensembl saltarin
+# mzebra_gene_ensembl pez_cebra
+
+mono_nocturno= useMart("ensembl", dataset = "anancymaae_gene_ensembl")
+murcielago = useMart("ensembl", dataset = "rferrumequinum_gene_ensembl")
+caballo = useMart("ensembl", dataset = "ecaballus_gene_ensembl")
+gato = useMart("ensembl", dataset = "fcatus_gene_ensembl")
+humano = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+bison= useMart("ensembl", dataset = "bbbison_gene_ensembl")
+cerdo_vietnamita= useMart("ensembl", dataset = "sspietrain_gene_ensembl")
+toro=useMart("ensembl", dataset = "btaurus_gene_ensembl")
+rata =useMart("ensembl", dataset = "rnorvegicus_gene_ensembl")
+raton=useMart("ensembl", dataset = "mmusculus_gene_ensembl")
+macaco= useMart("ensembl", dataset="mmulatta_gene_ensembl")
+pavo_salvaje = useMart("ensembl", dataset="mgallopavo_gene_ensembl")
+canario= useMart("ensembl", dataset= "scanaria_gene_ensembl")
+salmon= useMart("ensembl", dataset= "ssalar_gene_ensembl")
+pez_millon= useMart("ensembl", dataset= "preticulata_gene_ensembl")
+pez_japones= useMart("ensembl", dataset = "olatipes_gene_ensembl")
+papamoscas= useMart("ensembl", dataset= "falbicollis_gene_ensembl")
+saltarin = useMart("ensembl", dataset="mvitellinus_gene_ensembl")
+pez_cebra = useMart("ensembl", dataset="mzebra_gene_ensembl")
+
+# La función getSequence de Biomart, permite obtener la secuencia de un objeto de datos.
+# En nuestro caso sera la secuencia proteica del gen HERC2, por ello el argumento seqType tomará el valor "peptide"
+#Construimos una funcion cuyo argumento podrán ser los distintos datasets generados anteriormente.
+
+gen="HERC2"
+
+funcion_gen= function(especie){
+  secuencia_peptidica = getSequence (id=gen, type="external_gene_name",
+  seqType="peptide", mart= especie)
+ gen =gsub("[[:punct:]]", "", secuencia_peptidica$peptide[which.max(nchar(secuencia_peptidica$peptide))])
+ return(gen)}
+
+# Cada gen tiene muchos transcritos por ello con la funcion which.max elegimos el transcrito de mayor tamaño,
+# puesto que es el que mejor anotado está en ensembl en todas las especies. Además gsub nos permite eliminar
+# de la secuencia símbolos no deseados
+
+#Posteriormente unimos las secuencias con la especie que le corresponde(identificador_fasta)
+
+todos_genes= rbind(funcion_gen(mono_nocturno), funcion_gen(murcielago),
+ funcion_gen(caballo), funcion_gen(gato), funcion_gen(humano), funcion_gen(bison),
+ funcion_gen(cerdo_vietnamita), funcion_gen(toro), funcion_gen(rata),
+ funcion_gen(raton),funcion_gen(macaco),funcion_gen(pavo_salvaje), funcion_gen(canario), funcion_gen(salmon), funcion_gen(pez_millon), funcion_gen(pez_japones), funcion_gen(papamoscas), funcion_gen(saltarin), funcion_gen(pez_cebra))
+
+
+identificador_fasta= c("mono_nocturno", "murcielago", "caballo", "gato",
+"humano", "bison", "cerdo_vietnamita", "toro", "rata", "raton","macaco","pavo_salvaje",
+"canario", "salmon","pez_millon", "pez_japones", "papamoscas",
+"saltarin", "pez_cebra")
+ 
+informacion=cbind(todos_genes,identificador_fasta)
+informacion
+
+informacion_frame= data.frame(informacion)
+
+#Finalmente el paquete Biomart nos permite exportar los resultados del data frame a un archivo formato FASTA
+
+exportFASTA(informacion_frame, file="R_especies.fasta")
+
+#Segundo paso(Alineamiento de secuencias)
+
+library(msa)
+#Se translado el archivo FASTA obtenido anteriormente a la carpeta examples, incluida en el paquete msa
+
+mySequenceFile=system.file("examples","R_especies.fasta",package="msa")
+mySequenceFile
+
+#En primer lugar se crea un objeto mediante la función readAAStringSet que contiene  las cadenas las proteinas
+#sin alinear
+secuencias = readAAStringSet(mySequenceFile)
+
+#Posteriormente, se alinean con la funcion msa
+alineamiento=msa(secuencias)
+
+# La función msaPrettyPrint sirve para realizar una representación gráfica del resultado de los alinemientos.
+# No obstante en este caso al llamar a la función con el valor output="asis",se nos generará una archivo FASTA
+# con el resultado del alineamiento
+
+msaPrettyPrint(alineamiento,output="asis",y=c(164,213),
+subset=c(1:19),showNames="none",showLogo="top",
+logoColors="rasmol",shadingMode="similar",
+showLegend=FALSE,askForOverwrite=FALSE)
+#(el nombre del archivo FASTA generado es alineamiento.fasta)
+
+#Por otra parte podemos generar un heatmap con las distancias relativas calculadas con la funcion dist.alignment
+#Para ello utilizaremos el paquete seqinr y RJSplot
+
+#La funcón msaConvert sirve para convertir el objeto resultante del alineamiento múltiple a un formato apto para 
+#otros paquetes de analisis de secuencias(seqinr) 
+
+arbol=msaConvert(alineamiento,type="seqinr::alignment")
+
+library(seqinr)
+d= dist.alignment(arbol,"identity")
+library(RJSplot)
+#Representación de un heatmap
+heatmap_rjs(d, scale="column", color="RdBkGr")
+
+
+#A continuación se representará el árbol filogenético. Para ello, emplearemos el paquete ggplot2 y ggendro.
+#Las funciones necesarias (dendro_data_k, plot_ggendro y set_labels_params) se encuentran disponibles en https://rpubs.com/TX-YXL/662586
+#y se adjuntaran en otro archivo debido a su extensión
+
+library(ggdendro)
+library(ggplot2)
+hc = hclust(d, method = "ward.D2") #recibe los datos de distancia(d) y realiza una agrupación jerárquica
+hcdata = dendro_data_k(hc, 3) #separa el arbol en tres cluster(en nuestro, caso separaremos en mamíferos, aves y peces)
+con_fondo= plot_ggdendro(hcdata, direction   = "lr", expand.y= 0.2)+labs(title="Árbol_filogenetico_gen_HERC2")
+
+# Podemos quitar el fondo del gráfico igualmente
+
+p = con_fondo + theme_bw(base_size = 20) +
+ theme(panel.grid.minor=element_blank(), 
+         panel.grid.major=element_blank()) +
+     theme(axis.ticks = element_blank(), 
+         axis.text.y = element_blank()) +
+    theme(panel.border = element_blank())
+
+#Ajustar el título
+p+theme(plot.title = element_text(hjust = 0.5))
+
+#Finalmente, compararemos la región de  aminoácidos  correspondiente al  dominio HECT entre todas las especies
+
+#Comenzamos leyendo el archivo FASTA(alienamiento) generado anteriomente con MSAprint
+seqs = read.fasta(file='alineamiento.fasta',seqtype="AA",as.string=TRUE,set.attributes=FALSE)
+
+#Seleccionamos la porción comprendendida entre los aminoácidos 4540 y 4610 (región del dominio HECT)
+vector=c()
+ for (a in seqs){
+ porcion=substr(a,4540,4610)
+ vector=c(vector,porcion)}
+vector
+
+#Unimos la secuencia de aminoacidos con el nombre de la especie a la que corresponde
+vector=cbind(vector,names(seqs))
+
+frame=data.frame(vector)
+
+# Y lo exportamos a un archivo FASTA
+
+exportFASTA(frame, file="region_dominio_HECT.fasta")
+
+#Realizamos nuevamente el alineamiento con msaPrettyPrint, pero esta vez lo enviamos a un archivo pdf
+#para visualizar y examinar el alineamiento(incluida la secuencia logo que representa la conservación de cada 
+#aminoácido)
+
+#el archivo fasta lo he transportado a la carpeta examples de msa
+
+mySequenceFile=system.file("examples","region_dominio_HECT.fasta",package="msa")
+mySeqs = readAAStringSet(mySequenceFile)
+mi_alineamiento = msa(mySeqs)
+tmpFile = tempfile(pattern="msa", tmpdir=".", fileext=".pdf")
+msaPrettyPrint(mi_alineamiento,file=tmpFile,output="pdf",
+showNames="left",logoColors="rasmol",shadingMode="similar",
+showLegend=FALSE,askForOverwrite=FALSE)
+library(Biobase)
+openPDF(tmpFile)
+
+#EJERCICIO EXTRA
+
+#Parte uno :extraer las posiciones donde existe una diferencia entre la secuencia del humano y la del macaco(especie filogenéticamente más cercana)
+library(openxlsx)
+library(seqinr)
+#Leemos el archivo Fasta con el alineamiento y unimos en un dataframe los datos almacenados en la lista
+seqs = read.fasta(file='alineamiento.fasta',seqtype="AA",as.string=TRUE,set.attributes=FALSE)
+datos = do.call(rbind, seqs)
+datos_tras=t(datos)
+comparacion=data.frame(datos_tras[,c("humano","macaco")])
+tras_otro=t(comparacion)
+frames=data.frame(tras_otro)
+
+#a partir del dataframe anterior,construimos un dataframe con las posiciones
+#donde existen discrepancias entre el macaco y humano y lo guardamos en un excel
+aa_human=c()
+aa_macac=c()
+posiciones=c()
+for (a in 1:nchar(frames$humano)){
+  if(substr(frames$humano,a,a)!=substr(frames$macaco,a,a)){
+  aa_human=c(aa_human,substr(frames$humano,a,a))
+  aa_macac=c(aa_macac,substr(frames$macaco,a,a))
+  posiciones=c(posiciones,a)}}
+diferencias_human_macac=data.frame(cbind(aa_human,aa_macac,posiciones))
+write.xlsx(diferencias_human_macac,file="diferencias_humano_macaco.csv")
+
+#Parte dos:
+#¿Estos cambios en la secuencia son relevantes o son cambios por aminoácidos semejantes?
+lectura=read.xlsx("diferencias_humano_macaco.csv",sep="\n")
+#Las aminoácidos se pueden clasificar en no polares, polares, cargados positivamente,
+# cargados negativamente y aromáticos neutros, y son los siguientes.
+
+ aa_no_polares=c("G","A","V","L","M","I")
+ aa_polares=c("S","T","C","P","N","Q")
+ aa_cargado_positivo=c("K","R","H")
+ aa_cargado_negativo=c("D","E")
+ aa_aromaticos_neutros=c("F","Y","W")
+
+
+#comparamos en las posiciones donde hay discrepancias entre el macaco y humano
+#si se produce uncambio de aminoacido por otro que pertenece a otro grupo
+cambios_aminoacidos=c()
+ for (a in 1:length(lectura$aa_macac)){
+ if(lectura$aa_human[a] %in% aa_no_polares==TRUE & lectura$aa_macac[a] %in% aa_no_polares==FALSE){
+ cambios_aminoacidos=c(cambios_aminoacidos,"cambio_no_polar")}
+ else if(lectura$aa_human[a] %in% aa_polares==TRUE & lectura$aa_macac[a] %in% aa_polares==FALSE){
+ cambios_aminoacidos=c(cambios_aminoacidos,"cambio_polar")}
+ else if(lectura$aa_human[a] %in% aa_cargado_positivo==TRUE & lectura$aa_macac[a] %in% aa_cargado_positivo==FALSE){
+ cambios_aminoacidos=c(cambios_aminoacidos,"cambio_cargado_positivo")}
+ else if(lectura$aa_human[a] %in% aa_cargado_negativo==TRUE & lectura$aa_macac[a] %in% aa_cargado_negativo==FALSE){
+ cambios_aminoacidos=c(cambios_aminoacidos,"cambio_cargado_negativo")}
+ else if(lectura$aa_human[a] %in% aa_aromaticos_neutros==TRUE & lectura$aa_macac[a] %in% aa_aromaticos_neutros==FALSE){
+ cambios_aminoacidos=c(cambios_aminoacidos,"cambio_aromatico_neutro")}
+ else{
+ cambios_aminoacidos=c(cambios_aminoacidos,"mismo_grupo")}
+ }
+lecturas=cbind(lectura,cambios_aminoacidos)
+
+#generamos un vector del tipo aa(de macaco)/aa(de humano) para posteriormente meterlo en un dataframe
+cambios_de_maca_a_human=c()
+ for (a in 1:length(lecturas$aa_macac)){
+ patron=paste0(lectura$aa_macac[a],"/",lectura$aa_human[a])
+ cambios_de_maca_a_human=c(cambios_de_maca_a_human,patron)}
+ cambios_de_maca_a_human
+constructo=cbind(cambios_de_maca_a_human,lecturas$cambios_aminoacidos,lecturas$posiciones)
+data_frame=data.frame(constructo)
+colnames(data_frame)=c("aa_cambios","cambio","posicion")
+#Lo guardamos en formato excel
+write.xlsx(data_frame,file="graficas_aminoacidos.csv")
+
+library(ggplot2)
+
+#Por último podemos representar estos cambios en una gráfica
+
+color=read.xlsx("graficas_aminoacidos.csv")
+color$valores2=1:nrow(color)
+y=as.numeric(color$posicion)
+g=ggplot(color, aes(x = factor(valores2), y = y,color=cambio)) + theme_bw() + geom_jitter(size=3)+ 
+ scale_x_discrete(labels=color$aa_cambios)+
+ labs(x='Cambios', y='Posicion')+ggtitle ("Cambios Aa macaco/humano")+
+theme(plot.title = element_text(hjust = 0.5))+
+scale_y_continuous( breaks = seq(0,5000,by=500))
+ggsave(filename="grafica_polares.pdf",device="pdf",plot=g, width = 17, height = 8, dpi = 300, units = "in")
+#separando con facet_grid podemos ver visualmente que tipos de cambios predominan
+separadas=g+facet_grid(cambio ~.)
+ggsave(filename="facet_grid_grafica_polares.pdf",device="pdf",plot=separadas, width = 17, height = 8, dpi = 300, units = "in")
+
+#Listado de los paquetes empleados
+# - biomaRt
+# - msa
+# - seqinr
+# - RJSplot
+# - ggdendro
+# - ggplot2
+# - Biobase
+# - openxlsx
+ 
